@@ -1,16 +1,8 @@
+using Azure.Messaging.ServiceBus;
 using Microsoft.AspNetCore.Authentication.Negotiate;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme)
-   .AddNegotiate();
-
-builder.Services.AddAuthorization(options =>
-{
-    // By default, all incoming requests will be authorized according to the default policy.
-    options.FallbackPolicy = options.DefaultPolicy;
-});
 
 var app = builder.Build();
 
@@ -23,13 +15,22 @@ app.MapGet("/", () =>
     return "I'm running";
 });
 
+var serviceBusClient = new ServiceBusClient("Endpoint=sb://renyo-service-bus.servicebus.windows.net/;SharedAccessKeyName=full;SharedAccessKey=8EUBmbVrHp3wnP2Xk3yWzZr8hxkvDm50P+ASbK7YRtM=;TransportType=NetMessaging;EntityPath=microservice");
 
-app.MapGet("/upload", async (IFormFile file) =>
+var sender = serviceBusClient.CreateSender("microservice");
+
+
+app.MapPost("/upload", async (IFormFile file) =>
 {
     var tempFile = Path.GetTempFileName();
     app.Logger.LogInformation(tempFile);
-    using var stream = File.OpenWrite(tempFile);
-    await file.CopyToAsync(stream);
+    MemoryStream ms = new();
+    await file.CopyToAsync(ms);
+    BinaryData binaryData = new(ms.ToArray());
+
+    await sender.SendMessageAsync(new ServiceBusMessage(binaryData));
+
+    return ;
 });
 
 app.Run();
